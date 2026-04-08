@@ -1,99 +1,342 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# QA Automation System — Auto Inspector
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Signal-driven autonomous QA. A signal comes in → system checks the site → reports what's broken.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+---
 
-## Description
+## How it works
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
-
-```bash
-$ npm install
+```
+Signal arrives (review / monitoring / GitHub / any source)
+        ↓
+Check Knowledge Base — site crawled before?
+        ↓ NO                    ↓ YES
+Crawl entire site       Find affected page instantly
+Build KB tree           No crawling needed
+        ↓                       ↓
+Go directly to affected page (Playwright)
+Execute known flow (click, fill, submit)
+        ↓
+Take screenshot + grab page content
+        ↓
+Send to AI once — one-shot analysis
+        ↓
+Report: issue found / passed + summary
+        ↓
+KB updated with new errors found
 ```
 
-## Compile and run the project
+---
+
+## Stack
+
+- **NestJS** — API server
+- **Playwright** — real browser automation
+- **Groq (llama-4)** — AI analysis (fast, free)
+- **Knowledge Base** — JSON tree per site, saved to disk
+
+---
+
+## Setup
+
+### 1. Install dependencies
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+cd backend
+npm install
+npx playwright install chromium
 ```
 
-## Run tests
+### 2. Environment variables
+
+Create `backend/.env`:
+
+```env
+# Required — get free key at console.groq.com
+GROQ_API_KEY=your_groq_key_here
+
+# Optional — for Playwright docker mode
+PLAYWRIGHT_WS_ENDPOINT=ws://localhost:3001
+```
+
+### 3. Run
 
 ```bash
-# unit tests
-$ npm run test
+# Terminal 1 — backend
+cd backend
+npm run start:dev
 
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+# Terminal 2 — frontend (optional)
+cd frontend
+npm run dev
 ```
 
-## Deployment
+Server runs at `http://localhost:3000`
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+---
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## Signal API
+
+### Send a signal
+
+```
+POST /signal
+```
+
+**Body:**
+
+```json
+{
+  "site_url": "https://yoursite.com",
+  "issue": "schedule meeting button failing",
+  "page": "/booking",
+  "source": "twitter_review",
+  "severity": "high",
+  "metadata": {}
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `site_url` | yes | Full URL of the site to check |
+| `issue` | yes | What's broken in plain English |
+| `page` | no | Exact page path — skips KB lookup if provided |
+| `source` | no | Where signal came from (twitter, github, monitoring) |
+| `severity` | no | high / medium / low |
+| `metadata` | no | Any extra info |
+
+**Response:**
+
+```json
+{
+  "status": "passed",
+  "site_url": "https://yoursite.com",
+  "target_url": "https://yoursite.com/booking",
+  "kb_used": true,
+  "issue_found": false,
+  "summary": "No visible errors found on /booking",
+  "errors_found": []
+}
+```
+
+---
+
+## Knowledge Base API
+
+### Build KB for a site (first time)
+
+```
+POST /signal/kb/build
+```
+
+```json
+{ "site_url": "https://yoursite.com" }
+```
+
+Crawls the entire site with Playwright. Saves pages, elements, forms, flows, API calls to `kb/yoursite.com/tree.json`. Run this once per site. Signal endpoint auto-builds if KB doesn't exist.
+
+---
+
+### List all sites in KB
+
+```
+GET /signal/kb
+```
+
+```json
+[
+  {
+    "site": "https://bharatmcp.com",
+    "crawled_at": "2026-04-08T15:00:00.000Z",
+    "page_count": 4,
+    "flow_count": 1
+  }
+]
+```
+
+---
+
+### Reset KB for a site
+
+```
+POST /signal/kb/reset
+```
+
+```json
+{ "site_url": "https://yoursite.com" }
+```
+
+Deletes the KB. Next signal will rebuild it automatically.
+
+---
+
+## How to connect your signal source
+
+Any system can send a signal. Just POST to `/signal`.
+
+### From your friend's review system
+
+```python
+import requests
+
+def send_qa_signal(issue_text, site_url):
+    requests.post("http://your-qa-server:3000/signal", json={
+        "site_url": site_url,
+        "issue": issue_text,
+        "source": "review_system",
+        "severity": "high"
+    })
+
+# example — negative review detected
+send_qa_signal("booking page not working", "https://bharatmcp.com")
+```
+
+### From GitHub webhook
+
+```
+Repo → Settings → Webhooks → Add webhook
+
+Payload URL:  http://your-server:3000/signal
+Content type: application/json
+```
+
+Send this body on push:
+
+```json
+{
+  "site_url": "https://yoursite.com",
+  "issue": "code pushed to main — run full QA",
+  "source": "github",
+  "severity": "medium"
+}
+```
+
+### From monitoring system
 
 ```bash
-$ npm install -g mau
-$ mau deploy
+# when error detected
+curl -X POST http://your-qa-server:3000/signal \
+  -H "Content-Type: application/json" \
+  -d '{
+    "site_url": "https://yoursite.com",
+    "issue": "500 error on checkout",
+    "page": "/checkout",
+    "source": "monitoring",
+    "severity": "high"
+  }'
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### From CI/CD (GitHub Actions)
 
-## Resources
+Add to `.github/workflows/deploy.yml`:
 
-Check out a few resources that may come in handy when working with NestJS:
+```yaml
+- name: Run QA after deploy
+  run: |
+    curl -X POST ${{ secrets.QA_SERVER_URL }}/signal \
+      -H "Content-Type: application/json" \
+      -d '{
+        "site_url": "${{ secrets.SITE_URL }}",
+        "issue": "full QA after deploy",
+        "source": "github_actions",
+        "severity": "high"
+      }'
+```
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+---
 
-## Support
+## Signal → page mapping
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+The system automatically maps your issue text to the right page:
 
-## Stay in touch
+| Issue contains | Goes to |
+|----------------|---------|
+| schedule / meeting / book / calendar | `/talk-with-us` or `/booking` |
+| login / signin / auth | `/login` or `/auth` |
+| signup / register | `/signup` or `/register` |
+| payment / checkout | `/payment` or `/checkout` |
+| contact | `/contact` or `/talk-with-us` |
+| access | `/early-access` |
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+If no keyword matches — goes to first non-home page in KB.
 
-## License
+---
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+## KB file structure
+
+```
+kb/
+└── bharatmcp.com/
+    ├── meta.json       ← site info, page count, crawled_at
+    └── tree.json       ← full site map with pages, elements, forms, flows
+```
+
+`tree.json` example:
+
+```json
+{
+  "site": "https://bharatmcp.com",
+  "crawled_at": "2026-04-08T15:00:00.000Z",
+  "pages": [
+    {
+      "url": "/talk-with-us",
+      "title": "Bharat MCP",
+      "elements": ["button|1", "button|2", ...],
+      "forms": [{ "fields": ["name", "email", "company"], "action": "" }],
+      "known_errors": ["Failed to schedule meeting"],
+      "apis_called": ["POST /api/schedule"]
+    }
+  ],
+  "api_endpoints": [
+    { "method": "POST", "path": "/api/schedule", "last_status": "unknown" }
+  ],
+  "flows": [
+    {
+      "name": "schedule_meeting",
+      "steps": ["select date", "select time", "click Continue", "fill form", "submit"]
+    }
+  ]
+}
+```
+
+---
+
+## Old jobs endpoint (still works)
+
+```
+POST /jobs/test.run
+```
+
+```json
+{
+  "startUrl": "https://yoursite.com",
+  "userStory": "Check if the homepage loads correctly"
+}
+```
+
+Returns WebSocket URL for live browser view.
+
+---
+
+## Deploy to Railway (24/7)
+
+1. Push everything to GitHub
+2. Go to [railway.app](https://railway.app) → New Project → Deploy from GitHub
+3. Select your repo
+4. Add environment variables:
+   - `GROQ_API_KEY` = your key
+5. Deploy
+
+Your public URL: `https://your-app.railway.app/signal`
+
+Point all signal sources to this URL.
+
+---
+
+## What's next — Phase 3
+
+- AI reads your GitHub repo source code
+- Finds the exact file and line causing the issue
+- Writes a fix
+- Opens a GitHub PR automatically
+- Re-runs QA to confirm fix works

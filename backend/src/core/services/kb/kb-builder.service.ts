@@ -1,4 +1,3 @@
-// src/core/services/kb/kb-builder.service.ts
 import { Injectable, Logger } from '@nestjs/common';
 import { chromium, Browser, Page } from 'playwright';
 import { KbStoreService, KbTree, KbPage, KbFlow } from './kb-store.service';
@@ -11,8 +10,10 @@ export class KbBuilderService {
 
   async build(siteUrl: string): Promise<KbTree> {
     this.logger.log(`Building KB for ${siteUrl}...`);
-
-    const browser = await chromium.launch({ headless: true });
+    const wsEndpoint = process.env.PLAYWRIGHT_WS_ENDPOINT ?? null;
+    const browser    = wsEndpoint
+      ? await chromium.connect(wsEndpoint)
+      : await chromium.launch({ headless: true });
 
     try {
       const tree = await this._crawl(browser, siteUrl);
@@ -25,24 +26,23 @@ export class KbBuilderService {
   }
 
   private async _crawl(browser: Browser, siteUrl: string): Promise<KbTree> {
-    const base     = siteUrl.replace(/\/$/, '');
-    const visited  = new Set<string>();
-    const queue    = [base];
-    const pages:   KbPage[] = [];
-    const apis:    { method: string; path: string; last_status: string }[] = [];
-    const flows:   KbFlow[] = [];
+    const base    = siteUrl.replace(/\/$/, '');
+    const visited = new Set<string>();
+    const queue   = [base];
+    const pages:  KbPage[] = [];
+    const apis:   { method: string; path: string; last_status: string }[] = [];
+    const flows:  KbFlow[] = [];
 
     while (queue.length > 0 && pages.length < 30) {
-      const url = queue.shift()!;
-      if (visited.has(url)) continue;
-      visited.add(url);
+      const url        = queue.shift()!;
+      const normalized = url.replace(/\/$/, '') || base;
+      if (visited.has(normalized)) continue;
+      visited.add(normalized);
 
       this.logger.log(`Crawling: ${url}`);
-
-      const page = await browser.newPage();
-
-      // intercept API calls
+      const page      = await browser.newPage();
       const apiCalls: string[] = [];
+
       page.on('request', req => {
         const u = req.url();
         if (
@@ -53,35 +53,27 @@ export class KbBuilderService {
           const parsed = new URL(u);
           const entry  = `${req.method()} ${parsed.pathname}`;
           if (!apiCalls.includes(entry)) apiCalls.push(entry);
-
-          // also add to global api list
-          const existing = apis.find(a => a.path === parsed.pathname);
-          if (!existing) {
-            apis.push({
-              method:      req.method(),
-              path:        parsed.pathname,
-              last_status: 'unknown',
-            });
+          if (!apis.find(a => a.path === parsed.pathname)) {
+            apis.push({ method: req.method(), path: parsed.pathname, last_status: 'unknown' });
           }
         }
       });
 
       try {
-        await page.goto(url, { waitUntil: 'networkidle', timeout: 15000 });
-        await page.waitForTimeout(1000);
+        await page.goto(url, { waitUntil: 'networkidle', timeout: 20000 });
+        await page.waitForTimeout(3000);
 
         const kbPage = await this._extractPage(page, url, base, apiCalls);
         pages.push(kbPage);
 
-        // add new links to queue
         for (const link of kbPage.links) {
           const full = link.startsWith('http') ? link : `${base}${link}`;
-          if (!visited.has(full) && full.startsWith(base)) {
+          const norm = full.replace(/\/$/, '');
+          if (!visited.has(norm) && full.startsWith(base)) {
             queue.push(full);
           }
         }
 
-        // detect flows from page
         const pageFlows = await this._detectFlows(page, url);
         flows.push(...pageFlows);
 
@@ -107,46 +99,60 @@ export class KbBuilderService {
     base:     string,
     apiCalls: string[],
   ): Promise<KbPage> {
-
     const title = await page.title();
 
-    // extract all links
     const links = await page.$$eval('a[href]', els =>
       els.map(el => (el as HTMLAnchorElement).getAttribute('href') ?? '')
          .filter(h => h && !h.startsWith('#') && !h.startsWith('mailto:'))
     );
 
-    // extract interactive elements with labels
     const elements = await page.$$eval(
       'button, [role="button"], input, select, textarea, a[href]',
       els => els.map(el => {
-        const text  = (el as HTMLElement).innerText?.trim();
+        const text  = (el as HTMLElement).innerText?.trim() ?? '';
         const label = el.getAttribute('aria-label') ?? '';
         const type  = el.getAttribute('type') ?? el.tagName.toLowerCase();
         const id    = el.getAttribute('id') ?? '';
         const name  = el.getAttribute('name') ?? '';
         return [text, label, type, id, name].filter(Boolean).join('|');
-      }).filter(Boolean).slice(0, 50)
+      }).filter(Boolean).slice(0, 60)
     );
 
-    // extract forms
     const forms = await page.$$eval('form', els =>
       els.map(form => {
-        const fields = Array.from(form.querySelectorAll('input, select, textarea'))
-          .map(f => (f as HTMLInputElement).name || (f as HTMLInputElement).placeholder || (f as HTMLInputElement).type)
-          .filter(Boolean);
-        const action = (form as HTMLFormElement).action ?? '';
-        return { fields, action };
+        const fields = Array.from(
+          form.querySelectorAll('input, select, textarea')
+        ).map(f =>
+          (f as HTMLInputElement).name ||
+          (f as HTMLInputElement).placeholder ||
+          (f as HTMLInputElement).type
+        ).filter(Boolean);
+        return { fields, action: (form as HTMLFormElement).action ?? '' };
       })
     );
 
-    // extract known errors visible on page
+    // also check for React-rendered inputs not inside form tags
+    const allInputs = await page.$$eval(
+      'input:not([type="hidden"]), textarea',
+      els => els.map(el => ({
+        name:        el.getAttribute('name') ?? '',
+        placeholder: el.getAttribute('placeholder') ?? '',
+        type:        el.getAttribute('type') ?? 'text',
+      }))
+    );
+
+    if (allInputs.length > 0 && forms.length === 0) {
+      forms.push({
+        fields: allInputs.map(i => i.name || i.placeholder || i.type).filter(Boolean),
+        action: '',
+      });
+    }
+
     const known_errors = await page.$$eval(
-      '[class*="error"], [class*="Error"], [role="alert"], [class*="toast"]',
+      '[class*="error"],[class*="Error"],[role="alert"],[class*="toast"],[class*="fail"]',
       els => els.map(el => (el as HTMLElement).innerText?.trim()).filter(Boolean)
     );
 
-    // get relative url
     const relativeUrl = url.replace(base, '') || '/';
 
     return {
@@ -163,14 +169,14 @@ export class KbBuilderService {
   private async _detectFlows(page: Page, url: string): Promise<KbFlow[]> {
     const flows: KbFlow[] = [];
 
-    // detect scheduling/booking flow
-    const hasCalendar = await page.$('[class*="calendar"], [class*="Calendar"], [class*="datepicker"]');
+    const hasCalendar = await page.$(
+      '[class*="calendar"],[class*="Calendar"],[class*="datepicker"],[class*="DatePicker"]'
+    );
     if (hasCalendar) {
       flows.push({
         name:  'schedule_meeting',
         steps: [
-          'navigate to booking page',
-          'click Early Access button',
+          'navigate to /talk-with-us',
           'select date from calendar',
           'select time slot',
           'click Continue',
@@ -183,32 +189,11 @@ export class KbBuilderService {
       });
     }
 
-    // detect login flow
     const hasLogin = await page.$('input[type="password"]');
     if (hasLogin) {
       flows.push({
         name:  'login',
-        steps: [
-          'navigate to login page',
-          'fill email field',
-          'fill password field',
-          'click login button',
-        ],
-      });
-    }
-
-    // detect signup flow
-    const hasSignup = await page.$('input[name*="confirm"], input[name*="register"]');
-    if (hasSignup) {
-      flows.push({
-        name:  'signup',
-        steps: [
-          'navigate to signup page',
-          'fill name field',
-          'fill email field',
-          'fill password field',
-          'click signup button',
-        ],
+        steps: ['fill email', 'fill password', 'click login'],
       });
     }
 

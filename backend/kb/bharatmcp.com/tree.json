@@ -1,0 +1,89 @@
+{
+  "site": "https://bharatmcp.com",
+  "crawled_at": "2026-04-08T14:20:24.782Z",
+  "pages": [
+    {
+      "url": "/",
+      "title": "Bharat Mcp",
+      "links": [
+        "/",
+        "/talk-with-us",
+        "/early-access"
+      ],
+      "elements": [
+        "Bharat MCP|a",
+        "Early Access|a",
+        "button",
+        "Integrate Now →|a",
+        "Register in Registry →|a",
+        "Integrate Now|a",
+        "Register Platform|a",
+        "Request Early Access|a",
+        "B\nbharatmcp|a",
+        "Contact|a",
+        "About|a",
+        "Talk With Us|a",
+        "Documentation|a",
+        "a"
+      ],
+      "forms": [],
+      "apis_called": [],
+      "known_errors": []
+    },
+    {
+      "url": "/talk-with-us",
+      "title": "Bharat Mcp",
+      "links": [
+        "/"
+      ],
+      "elements": [
+        "bharatmcp|a",
+        "button",
+        "1|button",
+        "2|button",
+        "3|button",
+        "4|button",
+        "5|button",
+        "6|button",
+        "7|button",
+        "8|button",
+        "9|button",
+        "10|button",
+        "11|button",
+        "12|button",
+        "13|button",
+        "14|button",
+        "15|button",
+        "16|button",
+        "17|button",
+        "18|button",
+        "19|button",
+        "20|button",
+        "21|button",
+        "22|button",
+        "23|button",
+        "24|button",
+        "25|button",
+        "26|button",
+        "27|button",
+        "28|button",
+        "29|button",
+        "30|button"
+      ],
+      "forms": [],
+      "apis_called": [],
+      "known_errors": []
+    },
+    {
+      "url": "/early-access",
+      "title": "Bharat Mcp",
+      "links": [],
+      "elements": [],
+      "forms": [],
+      "apis_called": [],
+      "known_errors": []
+    }
+  ],
+  "api_endpoints": [],
+  "flows": []
+}

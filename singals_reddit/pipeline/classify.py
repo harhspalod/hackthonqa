@@ -85,8 +85,8 @@ def _safe_parse_json(text: str) -> dict:
 # ------------------ MAIN FUNCTION ------------------
 
 def classify_feedback(post_text: str) -> dict:
-    api_key = os.getenv("GEMINI_API_KEY")
-    model_name = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    api_key = "AIzaSyBx7tRSg_SrO5dPGdFLGw_kukPHDC3Aot0"
+    model_name ="gemini-3-flash-preview"
 
     # ---------- NO API → MOCK ----------
     if not api_key:

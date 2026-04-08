@@ -51,8 +51,35 @@ export class SignalController {
       .execute(targetUrl, userStory)
       .then(result => {
         this.logger.log(`Agent done: ${result.status} — ${result.reason}`);
-        // update KB with result
-        if (kbPage && result.reason) {
+
+        // save result to file
+        const fs      = require('fs');
+        const path    = require('path');
+        const dir     = path.join(process.cwd(), 'results');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+        const record = {
+          timestamp:  new Date().toISOString(),
+          site_url:   siteUrl,
+          target_url: targetUrl,
+          kb_page:    kbPage?.url ?? '/',
+          issue:      signal.issue,
+          source:     signal.source ?? 'unknown',
+          severity:   signal.severity ?? 'medium',
+          status:     result.status,
+          reason:     result.reason,
+        };
+
+        const filename = `${Date.now()}_${result.status}.json`;
+        fs.writeFileSync(
+          path.join(dir, filename),
+          JSON.stringify(record, null, 2)
+        );
+
+        this.logger.log(`Result saved: results/${filename}`);
+
+        // update KB with errors
+        if (kbPage && result.reason && result.status === 'failed') {
           this.kbStore.updatePage(siteUrl, {
             ...kbPage,
             known_errors: [

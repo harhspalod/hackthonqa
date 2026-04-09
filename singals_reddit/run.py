@@ -6,24 +6,9 @@ QA_SERVER = "http://localhost:3000/signal"
 FAKE_REDDIT_POSTS = [
     {
         "site_url": "https://bharatmcp.com",
-        "issue":    "schedule meeting button not working, form crashes on submit",
-        "page":     "/talk-with-us",
+        "issue":    "schedule meeting failing",
         "source":   "reddit",
         "severity": "high",
-    },
-    {
-        "site_url": "https://bharatmcp.com",
-        "issue":    "early access page not loading",
-        "page":     "/early-access",
-        "source":   "reddit",
-        "severity": "medium",
-    },
-    {
-        "site_url": "https://bharatmcp.com",
-        "issue":    "homepage is very slow",
-        "page":     "/",
-        "source":   "reddit",
-        "severity": "low",
     },
 ]
 

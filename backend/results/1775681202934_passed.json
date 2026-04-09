@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-04-08T20:46:42.934Z",
+  "site_url": "https://bharatmcp.com",
+  "target_url": "https://bharatmcp.com/talk-with-us",
+  "kb_page": "/talk-with-us",
+  "issue": "schedule meeting failing",
+  "source": "reddit",
+  "severity": "high",
+  "status": "passed",
+  "reason": "The agent successfully reproduced the reported issue. The screenshot clearly shows a red error message 'Failed to schedule meeting' after the form was filled out and the submission was attempted, which confirms the 'schedule meeting failing' issue mentioned in the user story."
+}

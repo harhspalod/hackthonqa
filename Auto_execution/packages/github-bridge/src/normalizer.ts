@@ -144,3 +144,71 @@ export async function normalizeQAPayload(body: any): Promise<ReviewEvent> {
     },
   };
 }
+
+export async function normalizeGitHubIssue(payload: any): Promise<ReviewEvent> {
+  const issue = payload.issue;
+  const repo = payload.repository;
+
+  console.log(`[normalizer] Issue #${issue.number} ${repo.full_name}: ${issue.title}`);
+
+  const severity = issue.labels?.some(
+    (l: any) => l.name === "bug" || l.name === "security" || l.name === "critical"
+  ) ? "high" : "medium";
+
+  return {
+    id: uuid(),
+    createdAt: new Date().toISOString(),
+    source: "github_issue" as EventSource,
+    severity,
+    repo: {
+      owner: repo.owner.login,
+      name: repo.name,
+      fullName: repo.full_name,
+      defaultBranch: repo.default_branch,
+      cloneUrl: repo.clone_url,
+    },
+    pullRequest: null,
+    issueDescription: `Issue #${issue.number}: ${issue.title}\n\n${issue.body ?? ""}`,
+    issueUrl: issue.html_url,
+    changedFiles: [],
+    meta: {
+      issueNumber: issue.number,
+      issueTitle: issue.title,
+      labels: issue.labels?.map((l: any) => l.name) ?? [],
+    },
+  };
+}
+
+export async function normalizeGitHubIssue(payload: any): Promise<ReviewEvent> {
+  const issue = payload.issue;
+  const repo = payload.repository;
+
+  console.log(`[normalizer] Issue #${issue.number} ${repo.full_name}: ${issue.title}`);
+
+  const severity = issue.labels?.some(
+    (l: any) => l.name === "bug" || l.name === "security" || l.name === "critical"
+  ) ? "high" : "medium";
+
+  return {
+    id: uuid(),
+    createdAt: new Date().toISOString(),
+    source: "github_issue" as EventSource,
+    severity,
+    repo: {
+      owner: repo.owner.login,
+      name: repo.name,
+      fullName: repo.full_name,
+      defaultBranch: repo.default_branch,
+      cloneUrl: repo.clone_url,
+    },
+    pullRequest: null,
+    issueDescription: `Issue #${issue.number}: ${issue.title}\n\n${issue.body ?? ""}`,
+    issueUrl: issue.html_url,
+    changedFiles: [],
+    meta: {
+      issueNumber: issue.number,
+      issueTitle: issue.title,
+      labels: issue.labels?.map((l: any) => l.name) ?? [],
+    },
+  };
+}

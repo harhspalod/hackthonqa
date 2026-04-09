@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { normalizeGitHubPR, normalizeQAPayload } from "./normalizer";
+import { normalizeGitHubPR, normalizeGitHubIssue, normalizeQAPayload } from "./normalizer";
 import { enqueueReviewJob } from "./queue";
 
 const router = Router();
@@ -11,11 +11,33 @@ router.post("/github", async (req: Request, res: Response) => {
   console.log(`[webhook] GitHub event: ${event} action: ${payload?.action}`);
 
   const supportedPRActions = ["opened", "synchronize", "reopened"];
+  const supportedIssueActions = ["opened", "edited"];
 
   if (event === "pull_request" && supportedPRActions.includes(payload.action)) {
+    const commitMsg: string = payload.pull_request?.head?.commit?.message ?? "";
+    const autoFixMsg: string = payload.commits?.[0]?.message ?? "";
+
+    // Skip commits made by autopm itself to avoid infinite loop
+    if (commitMsg.includes("[autopm]") || autoFixMsg.includes("[autopm]")) {
+      console.log("[webhook] Skipping autopm commit — preventing loop");
+      return res.status(200).json({ ignored: "autopm_commit" });
+    }
+
+    // Also check sender
+    const sender = payload.sender?.login ?? "";
+    if (sender === "github-actions[bot]") {
+      console.log("[webhook] Skipping bot commit");
+      return res.status(200).json({ ignored: "bot_commit" });
+    }
+
     const reviewEvent = await normalizeGitHubPR(payload);
     console.log(`[webhook] Changed files fetched: ${reviewEvent.changedFiles?.length ?? 0}`);
-    console.log(`[webhook] Files:`, reviewEvent.changedFiles?.map((f: any) => f.path));
+    await enqueueReviewJob(reviewEvent);
+    return res.status(202).json({ queued: reviewEvent.id });
+  }
+
+  if (event === "issues" && supportedIssueActions.includes(payload.action)) {
+    const reviewEvent = await normalizeGitHubIssue(payload);
     await enqueueReviewJob(reviewEvent);
     return res.status(202).json({ queued: reviewEvent.id });
   }

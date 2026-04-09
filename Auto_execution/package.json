@@ -8,6 +8,7 @@
     "dev:analysis": "pnpm --filter analysis-workers dev",
     "dev:aggregator": "pnpm --filter aggregator dev",
     "dev:commenter": "pnpm --filter comment-writer dev",
+    "index:repo": "pnpm --filter repo-indexer dev",
     "build": "pnpm -r build"
   },
   "devDependencies": {
